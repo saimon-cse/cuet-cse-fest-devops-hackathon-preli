@@ -1,6 +1,74 @@
-# services:
-  # backend:
+version: "3.9"
 
-  # gateway:
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-admin}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.adminCommand('ping')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app
 
-  # mongo:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: cuet/backend:latest
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      BACKEND_PORT: ${BACKEND_PORT:-3847}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-admin}
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-admin}@mongo:27017/${MONGO_DATABASE:-products}?authSource=admin
+      MONGO_DATABASE: ${MONGO_DATABASE:-products}
+    expose:
+      - "3847"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
+
+  gateway:
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+    image: cuet/gateway:latest
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      NODE_ENV: production
+      GATEWAY_PORT: ${GATEWAY_PORT:-5921}
+      BACKEND_URL: http://backend:${BACKEND_PORT:-3847}
+    ports:
+      - "${GATEWAY_PORT:-5921}:${GATEWAY_PORT:-5921}"
+    depends_on:
+      backend:
+        condition: service_started
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
+
+volumes:
+  mongo_data:
+
+networks:
+  app:
+    driver: bridge

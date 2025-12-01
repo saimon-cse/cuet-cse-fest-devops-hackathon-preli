@@ -1,13 +1,13 @@
-FROM node:20-slim 
-
+FROM node:20-slim AS base
 WORKDIR /app
+ENV NODE_ENV=production
 
-COPY package.json ./
-
+COPY package*.json ./
 RUN npm install --omit=dev --no-progress
+COPY src ./src
 
-COPY . .
-
+RUN groupadd -r app && useradd -r -g app app
+USER app
 EXPOSE 5921
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node -e "fetch('http://localhost:5921/health').then(res=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"
+
 CMD ["npm", "start"]
